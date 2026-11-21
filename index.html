@@ -1,0 +1,57 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>대장간 한 방</title>
+<style>
+:root{color-scheme:dark;--amber:#ffc47d;--edge:#4a3831}*{box-sizing:border-box}body{margin:0;color:#fff5e5;background:radial-gradient(ellipse at 40% 0,#472920,#17151a 55%);font:16px system-ui,sans-serif;min-height:100vh}main{max-width:1100px;padding:32px 20px;margin:auto}header{border-bottom:1px solid var(--edge);padding:0 0 20px;margin-bottom:22px;display:flex;justify-content:space-between;align-items:end;gap:12px}h1{font-size:clamp(28px,6vw,50px);margin:0;letter-spacing:-.06em}p{line-height:1.55;color:#e3cbbb;margin:8px 0 18px}h2{margin-top:0;font-size:23px}.layout{display:grid;grid-template-columns:1.5fr 1fr;gap:18px}.panel{border:1px solid var(--edge);border-radius:22px;padding:22px;background:#211b1c;min-width:0}.arena{position:relative;min-height:270px;border-radius:14px;background:radial-gradient(ellipse,#61412f,#24191d 70%);overflow:hidden;display:grid;place-items:center;margin-bottom:20px}.arena img{width:100%;height:290px;object-fit:cover;object-position:center 30%}.bosslabel{position:absolute;bottom:0;left:0;right:0;padding:24px 18px 12px;background:linear-gradient(transparent,#130e11);font-weight:800}.fallback{font-size:96px}button,input{font:inherit;border-radius:10px;padding:11px 14px}button{cursor:pointer;background:#362826;color:#fff5e5;border:1px solid #745247}button.primary{background:var(--amber);color:#29160d;border-color:var(--amber);font-weight:850}button:disabled{opacity:.5;cursor:not-allowed}input{background:#17141a;border:1px solid #745247;width:100%;margin:0 0 10px;color:white}.cards,.buttons{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.card{border-color:var(--color);flex:1;min-width:85px;padding:8px}.card small{display:block;color:#ead4c8;margin-top:4px}.slots button{background:#17141a}.rank{list-style:none;padding:0;margin:0}.rank li{display:grid;grid-template-columns:28px 42px 1fr auto;align-items:center;gap:9px;border-bottom:1px solid var(--edge);padding:11px 0}.rank small{display:block;color:#e3cbbb;overflow-wrap:anywhere}.weapon{border:1px solid var(--color);border-radius:12px;padding:12px;text-align:center}.icon{display:inline-grid;place-items:center;width:39px;height:39px;border:1px solid var(--color);border-radius:10px;color:var(--color);background:#2e232c}.weapon .icon{font-size:42px;width:70px;height:70px}.hit{animation:flash .4s ease-out}@keyframes flash{30%{transform:translateX(5px);filter:brightness(1.8)}65%{transform:translateX(-5px)}}@media(prefers-reduced-motion:reduce){.hit{animation:none}}#damage{position:absolute;color:#ffe2a8;font-size:clamp(52px,12vw,100px);font-weight:950;text-shadow:0 4px 20px #301009}#note{min-height:1.5em;color:var(--amber)}[hidden]{display:none!important}@media(max-width:760px){main{padding:16px 12px}.layout{grid-template-columns:1fr}.panel{padding:15px}.arena{min-height:210px}.arena img{height:230px}}
+</style><main><header><div><h1>대장간 한 방</h1><p style="margin-bottom:0">재료 다섯 개, 보스에게 단 한 방.</p></div><strong id="nick"></strong></header>
+<div class="layout"><section class="panel"><div class="arena" id="arena"><span class="fallback" id="fallback">🎋</span><img src="/boss.jpeg" alt="갈대 군주" onload="document.getElementById('fallback').hidden=true" onerror="this.hidden=true"><span class="bosslabel">갈대 군주</span><strong id="damage"></strong></div>
+<form id="join"><h2>참가하기</h2><label>이름<input name="realName" maxlength="30" required autocomplete="off"></label><label>랭킹에 표시할 닉네임<input name="nickname" minlength="2" maxlength="16" required autocomplete="off"></label><button class="primary">입장</button></form>
+<div id="play" hidden><div class="buttons"><button class="primary" id="start">재료 5개 뽑기</button></div><div id="craft" hidden><p id="instruction">재료를 넣을 순서대로 누르세요. 슬롯을 누르면 뺄 수 있습니다.</p><div class="cards" id="cards"></div><div class="cards slots" id="slots"></div><button class="primary" id="make" disabled>제작하기</button></div><div id="result" hidden></div><div class="buttons"><button id="retry" hidden>순서 한 번 바꾸기</button><button id="strike" class="primary" hidden>한 방 날리기</button></div></div><p id="note" role="status"></p></section>
+<aside class="panel"><h2>최고 피해량 랭킹</h2><p id="target">플레이어별 최고 기록</p><ol class="rank" id="rank"></ol></aside></div></main>
+<script>
+const el=id=>document.getElementById(id);
+let profile=JSON.parse(localStorage.getItem('forge-player')||'null'), round, mats=[], ids=[], attempts=0, busy=false;
+const makeNode=(tag,s,cls)=>{const n=document.createElement(tag);n.textContent=s;if(cls)n.className=cls;return n;};
+const icon=w=>{const n=makeNode('span',w.icon,'icon');n.style.setProperty('--color',w.color);return n;};
+async function api(path,payload){
+ const response=await fetch('/api/'+path,payload?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,token:profile?.token})}:{cache:'no-store'});
+ const data=await response.json();
+ if(!response.ok){if(response.status===401){profile=null;localStorage.removeItem('forge-player');showProfile();}throw Error(data.error);}
+ return data;
+}
+function showProfile(){el('join').hidden=!!profile;el('play').hidden=!profile;el('nick').textContent=profile?.nickname||'';}
+function action(fn){return async e=>{e?.preventDefault();if(busy)return;busy=true;el('note').textContent='';try{await fn(e);}catch(error){el('note').textContent=error.message;}finally{busy=false;}};}
+async function ranking(){
+ const list=await api('rank'), rank=el('rank');
+ rank.replaceChildren();
+ if(!list.length)rank.append(makeNode('p','첫 기록을 남겨 보세요.'));
+ list.forEach((w,i)=>{const row=makeNode('li',''), label=makeNode('div',w.nickname);label.append(makeNode('small',w.weapon));row.append(makeNode('b',i+1),icon(w),label,makeNode('strong',w.damage));rank.append(row);});
+ const i=list.findIndex(w=>w.nickname===profile?.nickname);
+ el('target').textContent=i>0?'내 순위 '+(i+1)+'위 · 바로 위를 넘으려면 '+(list[i-1].damage-list[i].damage+1)+'점 더':i===0?'내 순위 1위':'플레이어별 최고 기록';
+}
+function render(){
+ const available=el('cards'), slots=el('slots');available.replaceChildren();slots.replaceChildren();
+ mats.forEach(m=>{const b=makeNode('button',m.name,'card');b.type='button';b.append(makeNode('small',m.group+' · '+m.hint));b.style.setProperty('--color',m.color);b.disabled=ids.includes(m.id);b.onclick=()=>{ids.push(m.id);render();};available.append(b);});
+ for(let i=0;i<5;i++){const b=makeNode('button',(i+1)+' '+(mats.find(m=>m.id===ids[i])?.name||'빈 자리'));b.disabled=i>=ids.length;b.onclick=()=>{ids.splice(i,1);render();};slots.append(b);}
+ el('make').disabled=ids.length!==5;
+}
+el('join').onsubmit=action(async e=>{
+ const form=new FormData(e.target);profile=await api('register',{name:form.get('realName'),nickname:form.get('nickname')});localStorage.setItem('forge-player',JSON.stringify(profile));e.target.reset();showProfile();await ranking();
+});
+el('start').onclick=action(async()=>{
+ const data=await api('draw',{});round=data.round;mats=data.materials;ids=[];attempts=0;
+ el('start').hidden=true;el('craft').hidden=false;el('result').hidden=true;el('strike').hidden=true;el('retry').hidden=true;el('damage').textContent='';el('arena').classList.remove('hit');render();
+});
+let prior=null;
+el('make').onclick=action(async()=>{
+ const w=await api('forge',{round,ids});attempts=w.attempts;
+ const desc='자리 +'+w.position+' · 순서 궁합 +'+w.link;
+ const delta=prior===null?'': ' · 첫 제작 대비 '+(w.damage-prior>=0?'+':'')+(w.damage-prior);
+ if(attempts===1)prior=w.damage;
+ const card=makeNode('div','','weapon');card.style.setProperty('--color',w.color);card.append(icon(w),makeNode('h2',w.name),makeNode('p',(w.rare?'특수 조합 · ':'')+'예상 피해 '+w.damage+delta),makeNode('p',desc));
+ el('result').replaceChildren(card);el('result').hidden=false;el('craft').hidden=true;el('strike').hidden=false;el('retry').hidden=attempts>=2;
+});
+el('retry').onclick=()=>{el('craft').hidden=false;el('retry').hidden=true;el('note').textContent='첫 무기로 바로 공격하거나, 순서를 바꿔 다시 제작할 수 있습니다.';render();};
+el('strike').onclick=action(async()=>{
+ const w=await api('hit',{round});el('damage').textContent=w.damage;el('arena').classList.add('hit');el('craft').hidden=true;el('strike').hidden=true;el('retry').hidden=true;el('start').hidden=false;el('start').textContent='새 재료로 다시 도전';prior=null;await ranking();
+});
+showProfile();ranking().catch(e=>el('note').textContent=e.message);
+</script></html>
